@@ -1,13 +1,11 @@
 //import xerial.sbt.Sonatype.SonatypeKeys._
 //import xerial.sbt.Sonatype._
 
-val scalaV = "2.11.7"
-
-scalaVersion in ThisBuild := scalaV
-
 name := "play2-elasticsearch"
 
 version := "1.5-SNAPSHOT"
+
+organization := "com.clever-age"
 
 javacOptions := Seq("-Xlint:deprecation")
 
@@ -24,7 +22,6 @@ libraryDependencies ++= Seq(
 
 // sonatypeSettings
 
-organization := "com.clever-age"
 
 //profileName := "com.clever-age"
 
