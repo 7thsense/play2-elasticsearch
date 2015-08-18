@@ -163,6 +163,22 @@ public abstract class IndexService {
     }
 
     /**
+     * Create a BulkRequestBuilder for a List of Index objects
+     * @param indexPath
+     * @param ids
+     * @return
+     */
+    private static BulkRequestBuilder getBulkDeleteRequestBuilder(IndexQueryPath indexPath, List<String> ids) {
+        BulkRequestBuilder bulkRequestBuilder = IndexClient.client.prepareBulk();
+        for (String id: ids) {
+            bulkRequestBuilder.add(Requests.deleteRequest(indexPath.index)
+                .type(indexPath.type)
+                .id(id));
+        }
+        return bulkRequestBuilder;
+    }
+
+    /**
      * Bulk index a list of indexables
      * @param indexPath
      * @param indexables
@@ -170,6 +186,27 @@ public abstract class IndexService {
      */
     public static BulkResponse indexBulk(IndexQueryPath indexPath, List<? extends Index> indexables) {
         BulkRequestBuilder bulkRequestBuilder = getBulkRequestBuilder(indexPath, indexables);
+        return bulkRequestBuilder.execute().actionGet();
+    }
+
+    /**
+     * Bulk index a list of indexables asynchronously
+     * @param indexPath
+     * @param indexables
+     * @return
+     */
+    public static F.Promise<BulkResponse> deleteBulkAsync(IndexQueryPath indexPath, List<String> ids) {
+        return AsyncUtils.executeAsyncJava(getBulkDeleteRequestBuilder(indexPath, ids));
+    }
+
+    /**
+     * Bulk index a list of indexables
+     * @param indexPath
+     * @param ids The identifiers to delete
+     * @return
+     */
+    public static BulkResponse deleteBulk(IndexQueryPath indexPath, List<String> ids) {
+        BulkRequestBuilder bulkRequestBuilder = getBulkDeleteRequestBuilder(indexPath, ids);
         return bulkRequestBuilder.execute().actionGet();
     }
 
@@ -339,10 +376,20 @@ public abstract class IndexService {
      * @return
      */
     public static String getAsString(IndexQueryPath indexPath, String id) {
-        return getGetRequestBuilder(indexPath, id)
-                .execute()
-                .actionGet()
+        return getResponse(indexPath, id)
                 .getSourceAsString();
+    }
+
+    /**
+     * Get the document from an id
+     * @param indexPath
+     * @param id
+     * @return
+     */
+    public static GetResponse getResponse(IndexQueryPath indexPath, String id) {
+        return getGetRequestBuilder(indexPath, id)
+            .execute()
+            .actionGet();
     }
 
     private static <T extends Index> T getTFromGetResponse(Class<T> clazz, GetResponse getResponse) {
@@ -456,7 +503,7 @@ public abstract class IndexService {
             }
             creator.execute().actionGet();
         } catch (Exception e) {
-            Logger.error("ElasticSearch : Index create error : " + e.toString());
+            Logger.error("ElasticSearch : Index create error for " + indexName + ": " + e.toString());
         }
     }
 

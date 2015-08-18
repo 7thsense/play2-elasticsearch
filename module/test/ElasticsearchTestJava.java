@@ -220,7 +220,7 @@ public class ElasticsearchTestJava {
                 IndexService.refresh();
 
                 IndexQuery<Index1Type1> query = new IndexQuery<Index1Type1>(Index1Type1.class);
-                List<F.Promise<? extends IndexResults<Index1Type1>>> promises = new ArrayList<F.Promise<? extends IndexResults<Index1Type1>>>();
+                List<F.Promise<IndexResults<Index1Type1>>> promises = new ArrayList<F.Promise<IndexResults<Index1Type1>>>();
                 for (int i = 0; i < 10; i++) {
                     promises.add(query.fetchAsync(index1Type1.getIndexPath()));
                 }
@@ -255,7 +255,8 @@ public class ElasticsearchTestJava {
 
                 // Async
                 fieldNewValues.put("name","new-name-async");
-                F.Promise<UpdateResponse> updateResponsePromise = index1Type1.updateAsync(fieldNewValues, updateScript, ScriptService.ScriptType.INLINE);
+                F.Promise<UpdateResponse> updateResponsePromise = index1Type1.updateAsync(fieldNewValues,
+                        updateScript, ScriptService.ScriptType.INLINE);
                 updateResponsePromise.get(2L, TimeUnit.SECONDS);
 
                 index1Type11 = Index1Type1.find.byId("1");

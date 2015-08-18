@@ -21,7 +21,7 @@ class IndexingSpec extends Specification with ElasticsearchTestHelper {
    * Sample IndexableManager for managing SampleIndexable objects
    */
   object SampleIndexableManager extends IndexableManager[SampleIndexable]{
-    override val index = "test-index2"
+    override lazy val index = "test-index2"
     val indexType = "sampleIndexable"
     val reads = Json.reads[SampleIndexable]
     val writes = Json.writes[SampleIndexable]

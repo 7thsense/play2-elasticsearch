@@ -1,7 +1,9 @@
 package com.github.cleverage.elasticsearch
 
+import org.elasticsearch.search.aggregations.{Aggregations, AggregationBuilder, Aggregation}
+
 import collection.JavaConverters._
-import play.api.libs.json.{Json, Writes, Reads}
+import play.api.libs.json._
 import org.elasticsearch.search.facet.{FacetBuilder, Facets}
 import org.elasticsearch.action.delete.DeleteResponse
 import org.elasticsearch.action.index.IndexResponse
@@ -45,7 +47,7 @@ object ScalaHelpers {
      * Elasticsearch index used to index objects
      * Default is elasticsearch.index.name config value. Can be overriden
      */
-    val index: String = IndexService.INDEX_DEFAULT;
+    lazy val index: String = IndexService.INDEX_DEFAULT;
 
     /**
      * IndexQueryPath used to index objects built from index and indexType
@@ -74,9 +76,15 @@ object ScalaHelpers {
      * @return the object
      */
     def get(id: String): Option[T] = {
-      val json = Option(IndexService.getAsString(indexPath, id))
-      json.map {
-        Json.parse(_).as[T](reads)
+      val json = Option(IndexService.getResponse(indexPath, id))
+      json.map { h =>
+        val json: JsObject = Json.parse(h.getSourceAsString).as[JsObject]
+        val jsonWithId: JsObject = if((json\"id").asOpt[String].isEmpty) {
+          json ++ Json.obj("id" -> h.getId)
+        } else {
+          json
+        }
+        jsonWithId.as[T](reads)
       }
     }
 
@@ -85,11 +93,17 @@ object ScalaHelpers {
      * @param id
      * @return
      */
-    def getAsync(id: String)(implicit executor : scala.concurrent.ExecutionContext): Future[Option[T]] = {
+    def getAsync(id: String)(implicit executor: scala.concurrent.ExecutionContext): Future[Option[T]] = {
       val getResponseFuture = AsyncUtils.executeAsync(IndexService.getGetRequestBuilder(indexPath, id))
       getResponseFuture.map { response =>
-        Option(response.getSourceAsString).map {
-          Json.parse(_).as[T](reads)
+        Option(response.getSourceAsString).map { source =>
+          val json: JsObject = Json.parse(source).as[JsObject]
+          val jsonWithId: JsObject = if((json\"id").asOpt[String].isEmpty) {
+            json ++ Json.obj("id" -> response.getId)
+          } else {
+            json
+          }
+          jsonWithId.as[T](reads)
         }
       }
     }
@@ -111,24 +125,24 @@ object ScalaHelpers {
     }
 
     /**
-      * Index multiple objects
+     * Index multiple objects
      * @param tSeq a Sequence of objects to index
      * @return a Sequence of IndexResponse from Elasticsearch
      */
     def index(tSeq: Seq[T]): Seq[IndexResponse] = tSeq.map(t =>
-      IndexService.index(indexPath, t.id, Json.toJson(t)(writes).toString())
-    )
+      IndexService.index(indexPath, t.id, Json.toJson(t)(writes).toString()))
 
     /**
      * Index multiple objects asynchronously
      * @param tSeq
      * @return
      */
-    def indexAsync(tSeq: Seq[T])(implicit executor : scala.concurrent.ExecutionContext): Future[Seq[IndexResponse]] = {
+    def indexAsync(tSeq: Seq[T])(implicit executor: scala.concurrent.ExecutionContext): Future[Seq[IndexResponse]] = {
       Future.sequence(
         tSeq.map(t =>
-          AsyncUtils.executeAsync(IndexService.getIndexRequestBuilder(indexPath, t.id, Json.toJson(t)(writes).toString()))
-        )
+          AsyncUtils.executeAsync(IndexService.getIndexRequestBuilder(
+            indexPath, t.id, Json.toJson(t)(writes).toString()
+          )))
       )
     }
 
@@ -147,7 +161,6 @@ object ScalaHelpers {
       IndexService.indexBulk(indexPath, createBulkMap(tSeq).asJava)
     }
 
-
     /**
      * Index multiple objects in bulk mode asynchronously
      * @param tSeq
@@ -165,6 +178,15 @@ object ScalaHelpers {
     def delete(id: String): DeleteResponse = IndexService.delete(indexPath, id)
 
     /**
+     * Delete a list of objects from the elasticsearch index
+     * @param id Id of the object to delete
+     * @return the DeleteResponse from Elasticsearch
+     */
+    def deleteBulk(idSeq: Seq[String]): BulkResponse = {
+      IndexService.deleteBulk(indexPath, idSeq.asJava)
+    }
+
+    /**
      * Delete an object from the elasticsearch index asynchronously
      * @param id Id of the object to delete
      * @return the DeleteResponse from Elasticsearch
@@ -172,6 +194,15 @@ object ScalaHelpers {
     def deleteAsync(id: String): Future[DeleteResponse] = {
       AsyncUtils.executeAsync(IndexService.getDeleteRequestBuilder(indexPath, id))
     }
+
+    /**
+     * Delete a list of object from the elasticsearch index asynchronously
+     * @param id Id of the object to delete
+     * @return the DeleteResponse from Elasticsearch
+     */
+    //    def deleteBulkAsync(tSeq: Seq[T]): Future[DeleteResponse] = {
+    //      AsyncUtils.executeAsync(IndexService.getBulkDeleteRequestBuilder(indexPath, createBulkMap(tSeq).asJava))
+    //    }
 
     /**
      * Executes a query on the Elasticsearch index
@@ -185,7 +216,7 @@ object ScalaHelpers {
      * @param indexQuery
      * @return a Future of IndexResults
      */
-    def searchAsync(indexQuery: IndexQuery[T])(implicit executor : scala.concurrent.ExecutionContext): Future[IndexResults[T]] = indexQuery.fetchAsync(indexPath, reads)
+    def searchAsync(indexQuery: IndexQuery[T])(implicit executor: scala.concurrent.ExecutionContext): Future[IndexResults[T]] = indexQuery.fetchAsync(indexPath, reads)
 
     /**
      * Refresh the index
@@ -213,17 +244,21 @@ object ScalaHelpers {
    * @tparam T Type into which the results will be converted
    */
   case class IndexQuery[T <: Indexable](
-    val builder: QueryBuilder = QueryBuilders.matchAllQuery(),
-    val facetBuilders: List[FacetBuilder] = Nil,
-    val sortBuilders: List[SortBuilder] = Nil,
-    val from: Option[Int] = None,
-    val size: Option[Int] = None,
-    val explain: Option[Boolean] = None,
-    val noField: Boolean = false,
-    val preference: Option[String] = None
+      builder:             QueryBuilder                = QueryBuilders.matchAllQuery(),
+      aggregationBuilders: List[AggregationBuilder[_]] = Nil,
+      facetBuilders:       List[FacetBuilder]          = Nil,
+      sortBuilders:        List[SortBuilder]           = Nil,
+      from:                Option[Int]                 = None,
+      size:                Option[Int]                 = None,
+      explain:             Option[Boolean]             = None,
+      noField:             Boolean                     = false,
+      preference:          Option[String]              = None
   ) {
     def withBuilder(builder: QueryBuilder): IndexQuery[T] = copy(builder = builder)
     def addFacet(facet: FacetBuilder): IndexQuery[T] = copy(facetBuilders = facet :: facetBuilders)
+    def addAggregation(aggregationBuilder: AggregationBuilder[_]): IndexQuery[T] = {
+      copy(aggregationBuilders = aggregationBuilder :: aggregationBuilders)
+    }
     def addSort(sort: SortBuilder): IndexQuery[T] = copy(sortBuilders = sortBuilders :+ sort)
     def withFrom(from: Int): IndexQuery[T] = copy(from = Some(from))
     def withSize(size: Int): IndexQuery[T] = copy(size = Some(size))
@@ -249,7 +284,7 @@ object ScalaHelpers {
      * @param reads
      * @return
      */
-    def fetchAsync(indexPath: IndexQueryPath, reads: Reads[T])(implicit executor : scala.concurrent.ExecutionContext): Future[IndexResults[T]] = {
+    def fetchAsync(indexPath: IndexQueryPath, reads: Reads[T])(implicit executor: scala.concurrent.ExecutionContext): Future[IndexResults[T]] = {
       val request = buildRequest(indexPath)
       AsyncUtils.executeAsync(request).map {
         r => IndexResults(this, r, reads)
@@ -266,6 +301,9 @@ object ScalaHelpers {
         .setTypes(indexPath.`type`)
         .setSearchType(SearchType.QUERY_THEN_FETCH)
       request.setQuery(builder)
+      aggregationBuilders.foreach {
+        request.addAggregation(_)
+      }
       facetBuilders.foreach {
         request.addFacet(_)
       }
@@ -310,13 +348,16 @@ object ScalaHelpers {
    * @tparam T Type into which the results are converted
    */
   case class IndexResults[T <: Indexable](
-    totalCount: Long,
-    pageSize: Long,
-    pageCurrent: Long,
-    pageNb: Long,
-    results: List[T],
-    hits: List[SearchHit],
-    facets: Facets) {
+      totalCount:     Long,
+      pageSize:       Long,
+      pageCurrent:    Long,
+      pageNb:         Long,
+      results:        List[T],
+      hits:           List[SearchHit],
+      aggregations:   Aggregations,
+      facets:         Facets,
+      searchResponse: SearchResponse
+  ) {
     /**
      * Use this if you need the SearchHit associated with your Result
      */
@@ -332,26 +373,41 @@ object ScalaHelpers {
      * @tparam T Type into which the results are converted
      * @return constructed IndexResults
      */
-    def apply[T <: Indexable](indexQuery: IndexQuery[T], searchResponse: SearchResponse, reads: Reads[T]): IndexResults[T] = {
-      val totalCount: Long = searchResponse.getHits().totalHits()
+    def apply[T <: Indexable](
+      indexQuery:     IndexQuery[T],
+      searchResponse: SearchResponse,
+      reads:          Reads[T]
+    ): IndexResults[T] = {
+      val totalCount: Long = searchResponse.getHits.totalHits()
       val pageSize: Long =
-        indexQuery.size.fold(searchResponse.getHits().hits().length.toLong)(_.toLong)
-      val pageCurrent: Long = indexQuery.from.fold (1L){ f => ((f / pageSize) + 1) }
-      val hits = searchResponse.getHits().asScala.toList
+        indexQuery.size.fold(searchResponse.getHits.hits().length.toLong)(_.toLong)
+      val pageCurrent = if (pageSize == 0) {
+        1
+      } else {
+        indexQuery.from.fold(1L) { f => (f / pageSize) + 1 }
+      }
+      val hits = searchResponse.getHits.asScala.toList
 
       new IndexResults[T](
-        totalCount = totalCount,
-        pageSize = pageSize,
+        totalCount  = totalCount,
+        pageSize    = pageSize,
         pageCurrent = pageCurrent,
-        pageNb = if (pageSize == 0) 1 else math.round(math.ceil(totalCount / pageSize.toDouble)),
+        pageNb      = if (pageSize == 0) 1 else math.round(math.ceil(totalCount / pageSize.toDouble)),
         // Converting Json hits to Indexable entities
-        hits = hits,
-        results = hits.map {
-          h => Json.parse(h.getSourceAsString).as[T](reads)
+        hits           = hits,
+        results        = hits.map { h =>
+            val json: JsObject = Json.parse(h.getSourceAsString).as[JsObject]
+            val jsonWithId: JsObject = if((json\"id").asOpt[String].isEmpty) {
+              json ++ Json.obj("id" -> h.getId)
+            } else {
+              json
+            }
+            jsonWithId.as[T](reads)
         },
-        facets = searchResponse.getFacets()
+        aggregations   = searchResponse.getAggregations,
+        facets         = searchResponse.getFacets,
+        searchResponse = searchResponse
       )
     }
   }
-
 }

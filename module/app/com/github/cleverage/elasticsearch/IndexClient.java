@@ -8,6 +8,8 @@ import org.elasticsearch.node.NodeBuilder;
 import play.Application;
 import play.Logger;
 
+import javax.inject.Inject;
+
 import static org.elasticsearch.node.NodeBuilder.nodeBuilder;
 
 public class IndexClient {
@@ -18,9 +20,10 @@ public class IndexClient {
 
     public static IndexConfig config;
 
-    public IndexClient(Application application) {
+    @Inject
+    public IndexClient(IndexConfig config) {
         // ElasticSearch config load from application.conf
-        this.config = new IndexConfig(application);
+        this.config = config;
     }
 
     public void start() throws Exception {
@@ -37,7 +40,7 @@ public class IndexClient {
             client = node.client();
             Logger.info("ElasticSearch : Started in Local Mode");
         } else {
-            Logger.info("ElasticSearch : Starting in Client Mode");
+            Logger.info("ElasticSearch : Starting in TransportClient Mode");
             TransportClient c = new TransportClient(settings);
             if (config.client == null) {
                 throw new Exception("Configuration required - elasticsearch.client when local model is disabled!");
@@ -58,7 +61,7 @@ public class IndexClient {
                 throw new Exception("No Hosts Provided for ElasticSearch!");
             }
             client = c;
-            Logger.info("ElasticSearch : Started in Client Mode");
+            Logger.info("ElasticSearch : Started in TransportClient Mode");
         }
 
         // Check Client
@@ -99,7 +102,7 @@ public class IndexClient {
 
         // set default settings
         settings.put("client.transport.sniff", config.sniffing);
-        
+
         if (config.clusterName != null) {
             settings.put("cluster.name", config.clusterName);
         }
