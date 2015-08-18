@@ -1,4 +1,3 @@
-import play.Project._
 import scala.Some
 import xerial.sbt.Sonatype.SonatypeKeys._
 import xerial.sbt.Sonatype._
@@ -10,12 +9,10 @@ version := "1.4-SNAPSHOT"
 libraryDependencies ++= Seq(
   javaCore,
   // Add your project dependencies here
-  "org.elasticsearch" % "elasticsearch" % "1.4.1",
+  "org.elasticsearch" % "elasticsearch" % "1.7.1",
   "org.codehaus.groovy" % "groovy-all" % "2.3.8",
   "org.apache.commons" % "commons-lang3" % "3.1"
 )
-
-play.Project.playJavaSettings
 
 sonatypeSettings
 
