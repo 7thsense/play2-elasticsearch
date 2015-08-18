@@ -7,3 +7,4 @@ tmp
 dist
 data
 /.target
+/bin/
