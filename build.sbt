@@ -5,7 +5,7 @@ version := "1.5-SNAPSHOT"
 organization := "com.clever-age"
 
 val scala211Version="2.11.7"
-val scala210Version="2.10.4"
+val scala210Version="2.10.5"
 
 crossScalaVersions := Seq(scala211Version,scala210Version)
 

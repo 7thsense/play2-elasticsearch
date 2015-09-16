@@ -11,7 +11,7 @@ javacOptions := Seq("-Xlint:deprecation")
 
 libraryDependencies ++= Seq(
   javaCore,
-  specs2 % Test,
+//  specs2 % Test,
   // Add your project dependencies here
   "junit" % "junit" % "4.12" % Test,
   "org.easytesting" % "fest-assert" % "1.4" % Test,
