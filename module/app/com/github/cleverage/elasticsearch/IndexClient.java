@@ -1,5 +1,6 @@
 package com.github.cleverage.elasticsearch;
 
+import org.elasticsearch.client.node.NodeClient;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.settings.SettingsException;
@@ -27,7 +28,6 @@ public class IndexClient {
     }
 
     public void start() throws Exception {
-
         // Load Elasticsearch Settings
         ImmutableSettings.Builder settings = loadSettings();
 
@@ -40,28 +40,46 @@ public class IndexClient {
             client = node.client();
             Logger.info("ElasticSearch : Started in Local Mode");
         } else {
-            Logger.info("ElasticSearch : Starting in TransportClient Mode");
-            TransportClient c = new TransportClient(settings);
             if (config.client == null) {
                 throw new Exception("Configuration required - elasticsearch.client when local model is disabled!");
             }
 
-            String[] hosts = config.client.trim().split(",");
             boolean done = false;
-            for (String host : hosts) {
-                String[] parts = host.split(":");
-                if (parts.length != 2) {
-                    throw new Exception("Invalid Host: " + host);
+            if (config.client.equalsIgnoreCase("ec2")) {
+                Logger.info("ElasticSearch : Starting in ec2 node client mode");
+                ImmutableSettings.Builder ec2Settings = settings
+                        .put("plugin.mandatory",  "cloud-aws")
+                        .put("cloud.enabled", true)
+                        .put("discovery.type", "ec2")
+                        .put("sniff", true)
+                        .put("client.transport.sniff", true);
+                NodeBuilder nb = nodeBuilder().settings(ec2Settings)
+                        .local(false)
+                        .client(true)
+                        .data(false);
+                node = nb.node();
+                client = node.client();
+                done=true;
+                Logger.info("ElasticSearch : Started in ec2 node client mode");
+            } else {
+                Logger.info("ElasticSearch : Starting in TransportClient Mode");
+                TransportClient c = new TransportClient(settings);
+                String[] hosts = config.client.trim().split(",");
+                for (String host : hosts) {
+                    String[] parts = host.split(":");
+                    if (parts.length != 2) {
+                        throw new Exception("Invalid Host: " + host);
+                    }
+                    Logger.info("ElasticSearch : Client - Host: " + parts[0] + " Port: " + parts[1]);
+                    c.addTransportAddress(new InetSocketTransportAddress(parts[0], Integer.valueOf(parts[1])));
+                    done = true;
                 }
-                Logger.info("ElasticSearch : Client - Host: " + parts[0] + " Port: " + parts[1]);
-                c.addTransportAddress(new InetSocketTransportAddress(parts[0], Integer.valueOf(parts[1])));
-                done = true;
+                client = c;
+                Logger.info("ElasticSearch : Started in TransportClient Mode");
             }
             if (!done) {
                 throw new Exception("No Hosts Provided for ElasticSearch!");
             }
-            client = c;
-            Logger.info("ElasticSearch : Started in TransportClient Mode");
         }
 
         // Check Client
@@ -80,7 +98,7 @@ public class IndexClient {
             if (config.client == null) {
                 return true;
             }
-            if (config.client.equalsIgnoreCase("false") || config.client.equalsIgnoreCase("true")) {
+            if (config.client.equalsIgnoreCase("false")) {
                 return true;
             }
 
