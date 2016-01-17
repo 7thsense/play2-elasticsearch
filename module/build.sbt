@@ -16,7 +16,6 @@ libraryDependencies ++= Seq(
   "junit" % "junit" % "4.12" % Test,
   "org.easytesting" % "fest-assert" % "1.4" % Test,
   "org.elasticsearch" % "elasticsearch" % "1.7.4",
-  "org.elasticsearch" % "elasticsearch-cloud-aws" % "2.7.1",
   "org.codehaus.groovy" % "groovy-all" % "2.3.8",
   "org.apache.commons" % "commons-lang3" % "3.1"
 )
