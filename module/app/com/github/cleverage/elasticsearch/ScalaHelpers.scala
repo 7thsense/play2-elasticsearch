@@ -60,7 +60,7 @@ object ScalaHelpers {
      * <pre>Json.reads[MyIndexableClass]<pre>
      * or define a custom one if needed
      */
-    val reads: Reads[T]
+    def reads: Reads[T]
 
     /**
      * Writes used to convert a T instance to a Json value
@@ -68,7 +68,7 @@ object ScalaHelpers {
      * <pre>Json.writes[MyIndexableClass]<pre>
      * or define a custom one if needed
      */
-    val writes: Writes[T]
+    def writes: Writes[T]
 
     /**
      * Retrieve a T instance from the Elasticsearch index
